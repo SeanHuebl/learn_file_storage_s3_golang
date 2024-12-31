@@ -121,5 +121,6 @@ func main() {
 	}
 
 	log.Printf("Serving on: http://localhost:%s/app/\n", port)
+
 	log.Fatal(srv.ListenAndServe())
 }

@@ -45,8 +45,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType, _ := strings.CutPrefix(header.Header.Get("Content-type"), "type/")
-
+	mediaType, _ := strings.CutPrefix(header.Header.Get("Content-type"), "image/")
 	metaData, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "unable to locate video", err)
@@ -54,7 +53,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	fileName := fmt.Sprintf("%v.%v", videoID, mediaType)
-	filepath := filepath.Join(cfg.filepathRoot, "assets", fileName)
+	filepath := filepath.Join("./", "assets", fileName)
 
 	newFile, err := os.Create(filepath)
 	if err != nil {
