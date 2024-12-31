@@ -57,9 +57,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		data:      data,
 		mediaType: mediaType,
 	}
-	videoThumbnails[videoID] = thumbnail
 
-	thumbnailURL := fmt.Sprintf("localhost:%v/api/thumbnails/%v", cfg.port, videoID)
+	imgDataString := base64.StdEncoding.EncodeToString(thumbnail.data)
+	thumbnailURL := fmt.Sprintf("data:%v;base64,%v", thumbnail.mediaType, imgDataString)
+
 	metaData.ThumbnailURL = &thumbnailURL
 
 	err = cfg.db.UpdateVideo(metaData)
@@ -67,8 +68,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "unable to update metadata", err)
 		return
 	}
-	imgDataString := base64.StdEncoding.EncodeToString(thumbnail.data)
-	dataURL := fmt.Sprintf("data:%v;base64,%v", thumbnail.mediaType, imgDataString)
 
 	respondWithJSON(w, http.StatusOK, metaData)
 }
