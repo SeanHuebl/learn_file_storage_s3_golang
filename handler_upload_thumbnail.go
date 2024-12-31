@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -62,8 +64,15 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "unable to locate video", err)
 		return
 	}
+	rnd32 := make([]byte, 32)
+	_, err = rand.Read(rnd32)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to generate random bytes", err)
+		return
+	}
 
-	fileName := fmt.Sprintf("%v.%v", videoID, fileExtension)
+	fileID := base64.RawURLEncoding.EncodeToString(rnd32)
+	fileName := fmt.Sprintf("%v.%v", fileID, fileExtension)
 	filepath := filepath.Join("./", "assets", fileName)
 
 	newFile, err := os.Create(filepath)
