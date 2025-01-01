@@ -1,10 +1,17 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
+	"os"
+	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
 )
@@ -62,4 +69,49 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// save the upload to temp file on disk
+	tempFile, err := os.CreateTemp("", "tubely-upload.mp4")
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to create temp file", err)
+		return
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+	_, err = io.Copy(tempFile, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to copy file", err)
+		return
+	}
+	tempFile.Seek(0, io.SeekStart)
+	fileExtension, _ := strings.CutPrefix(mediaType, "video/")
+	rnd32 := make([]byte, 32)
+	_, err = rand.Read(rnd32)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to generate random bytes", err)
+		return
+	}
+
+	fileID := base64.RawURLEncoding.EncodeToString(rnd32)
+	fileName := fmt.Sprintf("%v.%v", fileID, fileExtension)
+
+	params := s3.PutObjectInput{
+		Bucket:      &cfg.s3Bucket,
+		Key:         &fileName,
+		Body:        tempFile,
+		ContentType: &mediaType,
+	}
+
+	_, err = cfg.s3Client.PutObject(context.Background(), &params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to put object in s3", err)
+		return
+	}
+	fmt.Printf("video uploaded to s3")
+	videoURL := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", cfg.s3Bucket, cfg.s3Region, fileName)
+	metaData.VideoURL = &videoURL
+	err = cfg.db.UpdateVideo(metaData)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to update metadata", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, metaData)
 }

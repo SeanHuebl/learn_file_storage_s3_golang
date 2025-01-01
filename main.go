@@ -103,7 +103,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Couldn't create assets directory: %v", err)
 	}
-
+	
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 	mux.Handle("/app/", appHandler)
