@@ -1,20 +1,31 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
 )
+
+type video struct {
+	Streams []struct {
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	} `json:"streams"`
+}
 
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	const maxUploadLimit = 1 << 30
@@ -81,6 +92,22 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "unable to copy file", err)
 		return
 	}
+	ratio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to get aspect ratio", err)
+		return
+	}
+	var layout string
+
+	switch ratio {
+	case "16:9":
+		layout = "landscape"
+	case "9:16":
+		layout = "portrait"
+	default:
+		layout = "other"
+	}
+
 	tempFile.Seek(0, io.SeekStart)
 	fileExtension, _ := strings.CutPrefix(mediaType, "video/")
 	rnd32 := make([]byte, 32)
@@ -91,7 +118,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	fileID := base64.RawURLEncoding.EncodeToString(rnd32)
-	fileName := fmt.Sprintf("%v.%v", fileID, fileExtension)
+	fileName := fmt.Sprintf("%v/%v.%v", layout, fileID, fileExtension)
 
 	params := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
@@ -114,4 +141,39 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, metaData)
+}
+
+func getVideoAspectRatio(filepath string) (string, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filepath)
+	var buffer bytes.Buffer
+	cmd.Stdout = &buffer
+	cmd.Run()
+	var video video
+	err := json.Unmarshal(buffer.Bytes(), &video)
+	if err != nil {
+		return "", fmt.Errorf("unable to marshal data: %v", err)
+	}
+
+	if len(video.Streams) == 0 {
+		return "", fmt.Errorf("no streams available")
+	}
+	v := video.Streams[0]
+	if v.Width == 0 || v.Height == 0 {
+		return "", fmt.Errorf("resolution cannot be 0")
+	}
+
+	ratio := floatToThreeDecimals(v.Width / v.Height)
+
+	switch ratio {
+	case floatToThreeDecimals(16.0 / 9.0):
+		return "16:9", nil
+	case floatToThreeDecimals(9.0 / 16.0):
+		return "9:16", nil
+	default:
+		return "other", nil
+	}
+}
+
+func floatToThreeDecimals(float float64) float64 {
+	return math.Floor(float*1000) / 1000
 }
