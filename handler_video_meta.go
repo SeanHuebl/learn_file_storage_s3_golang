@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -95,11 +94,6 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusNotFound, "Couldn't get video", err)
 		return
 	}
-	video, err = cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "could not sign video", err)
-		return
-	}
 	respondWithJSON(w, http.StatusOK, video)
 }
 
@@ -121,16 +115,5 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var signedVideos []database.Video
-	for i := range videos {
-		signedVideo, err := cfg.dbVideoToSignedVideo(videos[i])
-		if err != nil {
-			fmt.Printf("4. Error signing video: %v\n", err)
-			respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("error signing video at index %v", i), err)
-			return
-		}
-		signedVideos = append(signedVideos, signedVideo)
-	}
-
-	respondWithJSON(w, http.StatusOK, signedVideos)
+	respondWithJSON(w, http.StatusOK, videos)
 }
